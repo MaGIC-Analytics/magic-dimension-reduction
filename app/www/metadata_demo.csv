@@ -1,0 +1,10 @@
+,SampleName,Group,SampleNum,Test,Tester,Othertest
+Treatment1,Treatment1,Treatment,One,Treatment,Things,Things
+Treatment2,Treatment2,Treatment,Two,Treatment,Things,Things
+Treatment3,Treatment3,Treatment,Three,Treatment,Things,Things
+Control1,Control1,Control,One,Control,Things,Things
+Control2,Control2,Control,Two,Control,Things,Things
+Control3,Control3,Control,Three,Control,Notthings,Notthings
+Sham1,Sham1,Sham,One,Sham,Notthings,Notthings
+Sham2,Sham2,Sham,Two,Sham,Notthings,Notthings
+Sham3,Sham3,Sham,Three,Sham,Notthings,Notthings

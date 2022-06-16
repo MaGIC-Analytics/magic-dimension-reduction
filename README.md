@@ -1,6 +1,6 @@
 # magic-modules-template
 
-![GitHub last commit](https://img.shields.io/github/last-commit/alemenze/magic-modules-template)
+![GitHub last commit](https://img.shields.io/github/last-commit/alemenze/magic-dimension-reduction)
 [![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
 [![made with Shiny](https://img.shields.io/badge/R-Shiny-blue)](https://shiny.rstudio.com/)
 
@@ -9,6 +9,7 @@ This Shiny App has been built in to a docker container for easy deployment. You 
 ```
 docker build -t template .
 docker run -d --rm -p 8080:8080 template
+#Or for testing docker run -t -i --rm -p 8080:8080 template
 ```
 And it should be hosted at localhost:8080
 
