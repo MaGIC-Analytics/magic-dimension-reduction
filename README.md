@@ -1,4 +1,6 @@
 # magic-modules-template
+
+[![DOI](https://zenodo.org/badge/502469568.svg)](https://zenodo.org/doi/10.5281/zenodo.10845736)
 ![GitHub last commit](https://img.shields.io/github/last-commit/MaGIC-Analytics/magic-dimension-reduction)
 [![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
 [![made with Shiny](https://img.shields.io/badge/R-Shiny-blue)](https://shiny.rstudio.com/)
