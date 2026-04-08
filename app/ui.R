@@ -18,7 +18,27 @@ library(ggalt)
 tagList(
     tags$head(
         includeHTML(("www/GA.html")),
-        tags$style(type = 'text/css','.navbar-brand{display:none;}')
+        tags$style(type = 'text/css','.navbar-brand{display:none;}'),
+        tags$style(HTML("
+            #show_help_float {
+                position: fixed;
+                bottom: 28px;
+                right: 28px;
+                z-index: 9999;
+                border-radius: 50%;
+                width: 46px;
+                height: 46px;
+                font-size: 20px;
+                padding: 0;
+                box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+            }
+        "))
+    ),
+    ## Global always-visible help button (fixed bottom-right)
+    actionButton("show_help_float", label=NULL,
+        icon=icon("circle-question"),
+        title="Help & documentation",
+        class="btn btn-info"
     ),
     fluidPage(theme = shinytheme('yeti'),
             windowTitle = "MaGIC Dimensionality Reduction Tool",
@@ -194,9 +214,19 @@ tagList(
                                 conditionalPanel("input.PointOpts",
                                     selectInput("PCAColor", label='Color By', choices=NULL),
                                     sliderInput("PCAPointSize","Point size: ", min=0, max=30, step=1, value=5),
+                                    conditionalPanel("input.PCAplots=='Biplots'",
+                                        materialSwitch("CustomColorToggle", label="Custom colors per group", value=FALSE, right=TRUE, status='info'),
+                                        conditionalPanel("input.CustomColorToggle",
+                                            uiOutput("pca_color_ui")
+                                        )
+                                    )
                                 ),
                                 conditionalPanel("input.PointOpts && input.PCAplots=='Biplots'",
-                                    selectInput("PCAShape", label='Shape By', choices=NULL),
+                                    selectInput("PCAShape", label='Shape By (global)', choices=NULL),
+                                    materialSwitch("CustomShapeToggle", label="Custom shapes per group", value=FALSE, right=TRUE, status='info'),
+                                    conditionalPanel("input.CustomShapeToggle",
+                                        uiOutput("pca_shape_ui")
+                                    )
                                 )
                             ),
                             conditionalPanel("input.PCAplots=='Biplots'",
@@ -210,9 +240,14 @@ tagList(
                                     materialSwitch("Ellipse", label="Stat ellipses", value=FALSE, right=TRUE, status='info'),
                                     conditionalPanel("input.Ellipse",
                                         radioButtons("EType", label="Ellipse Type", inline=TRUE,
-                                            choices=c("T"='t'), selected="t"),
+                                            choices=c("Normal"='norm', "T"='t', "Euclid"='euclid'), selected="norm"),
                                         materialSwitch("Efill", label="Ellipse fill", value=TRUE, right=TRUE, status='info'),
                                     ),
+                                ),
+                                materialSwitch("AxisOpts", label="Axis font options", value=FALSE, right=TRUE, status='info'),
+                                conditionalPanel("input.AxisOpts",
+                                    sliderInput("PCAXAxisFontSize", "X-axis font size:", min=4, max=24, step=1, value=12),
+                                    sliderInput("PCAYAxisFontSize", "Y-axis font size:", min=4, max=24, step=1, value=12)
                                 ),
                                 materialSwitch("LegOpts", label="Legend Options", value=FALSE, right=TRUE, status='info'),
                                 conditionalPanel("input.LegOpts",
@@ -260,8 +295,20 @@ tagList(
                     ),
                     column(9,
                         tabsetPanel(id='PCAplots',
-                            tabPanel(title='Biplots', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                            tabPanel(title='Biplots',
+                                hr(),
+                                fluidRow(style="margin: 0 8px 4px 0;",
+                                    column(12, align="right",
+                                        actionButton("show_pca_code_modal", label=NULL,
+                                            icon=icon("file-code"),
+                                            title="View R code to reproduce this plot",
+                                            class="btn btn-default btn-sm",
+                                            style="border-radius:6px; font-size:16px; padding:4px 8px;"
+                                        )
+                                    )
+                                ),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotOutput("pca_out", height='100%')
                                 ),
                                 fluidRow(align='center',style="margin-top:25px;",
@@ -355,8 +402,20 @@ tagList(
                     ),
                     column(9,
                         tabsetPanel(id='tSNEplots',
-                            tabPanel(title='2D tSNE', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                            tabPanel(title='2D tSNE',
+                                hr(),
+                                fluidRow(style="margin: 0 8px 4px 0;",
+                                    column(12, align="right",
+                                        actionButton("show_tsne_code_modal", label=NULL,
+                                            icon=icon("file-code"),
+                                            title="View R code to reproduce this plot",
+                                            class="btn btn-default btn-sm",
+                                            style="border-radius:6px; font-size:16px; padding:4px 8px;"
+                                        )
+                                    )
+                                ),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotOutput("tsne2d_out", height='100%')
                                 ),
                                 fluidRow(align='center',style="margin-top:25px;",
@@ -429,8 +488,20 @@ tagList(
                     ),
                     column(9,
                         tabsetPanel(id='UMAPplots',
-                            tabPanel(title='2D UMAP', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                            tabPanel(title='2D UMAP',
+                                hr(),
+                                fluidRow(style="margin: 0 8px 4px 0;",
+                                    column(12, align="right",
+                                        actionButton("show_umap_code_modal", label=NULL,
+                                            icon=icon("file-code"),
+                                            title="View R code to reproduce this plot",
+                                            class="btn btn-default btn-sm",
+                                            style="border-radius:6px; font-size:16px; padding:4px 8px;"
+                                        )
+                                    )
+                                ),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotOutput("umap2d_out", height='100%')
                                 ),
                                 fluidRow(align='center',style="margin-top:25px;",
