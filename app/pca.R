@@ -1,8 +1,10 @@
 # ─── PCA BiPlots (ggplot2 / prcomp) ────────────────────────────────────────
 
 observe({
-    updateSelectInput(session, "PCAColor", choices=colnames(InputReactive()$meta_data))
-    updateSelectInput(session, "PCAShape", choices=colnames(InputReactive()$meta_data))
+    sel  <- input$Colby %||% input$DemoColby
+    cols <- colnames(InputReactive()$meta_data)
+    updateSelectInput(session, "PCAColor", choices=cols, selected=sel)
+    updateSelectInput(session, "PCAShape", choices=cols, selected=sel)
 })
 
 # Dynamic per-group color pickers
@@ -120,21 +122,10 @@ pca_plotter <- reactive({
         }
         pca_plot <- pca_plot + scale_shape_manual(values=custom_shapes)
 
-        if (isTRUE(input$Encirc)) {
-            pca_plot <- pca_plot +
-                geom_encircle(aes_string(group=color_col),
-                    fill  = if (isTRUE(input$FEncirc)) NA else NA,
-                    alpha = 0.2, color="black")
-        }
-
-        if (isTRUE(input$Ellipse)) {
-            pca_plot <- pca_plot +
-                stat_ellipse(aes_string(group=color_col),
-                    type  = input$EType %||% "norm",
-                    geom  = if (isTRUE(input$Efill)) "polygon" else "path",
-                    alpha = if (isTRUE(input$Efill)) 0.1 else 1,
-                    level = 0.95)
-        }
+        pca_plot <- add_overlay_2d(pca_plot, pca_data, "PC1", "PC2", color_col,
+            mode  = input$PCAOverlay %||% "none",
+            fill  = input$PCAOverlayFill %||% TRUE,
+            etype = input$EType %||% "norm")
 
         pca_plot
 
@@ -173,13 +164,17 @@ observe({
 })
 
 eigencorplotter <- reactive({
-    tryCatch({
-        p <- pca(InputReactive()$count_data, metadata=InputReactive()$meta_data, removeVar=0.1)
-    }, error=function(e) {
-        showNotification(paste(e), type='error', duration=NULL)
-    })
-
     validate(need(length(input$EigenMetavars)>=2, message='You must select at least 2 metadata columns'))
+
+    md <- InputReactive()$meta_data
+    for (col in colnames(md)) {
+        if (!is.numeric(md[[col]])) {
+            asnum <- suppressWarnings(as.numeric(md[[col]]))
+            md[[col]] <- if (all(is.na(asnum))) as.numeric(as.factor(md[[col]])) else asnum
+        }
+    }
+
+    p <- pca(InputReactive()$count_data, metadata=md, removeVar=0.1)
 
     eigencorplot(p,
         metavars              = input$EigenMetavars,
@@ -299,21 +294,25 @@ observeEvent(input$show_pca_code_modal, {
     } else {
         color_col <- isolate(input$PCAColor %||% "Group")
         shape_col <- isolate(input$PCAShape %||% color_col)
+        overlay   <- isolate(input$PCAOverlay %||% "none")
         code <- paste0(
-            "library(ggplot2)\nlibrary(ggrepel)\n\n",
-            "# count_mat — genes x samples numeric matrix\n",
+            "library(ggplot2)\nlibrary(ggrepel)\n",
+            "",
+            "\n# count_mat — genes x samples numeric matrix\n",
             "# metadata  — data.frame with sample metadata\n\n",
             "p <- prcomp(t(count_mat))\n",
             "var_exp  <- (p$sdev^2) / sum(p$sdev^2)\n",
             "var_pct  <- round(var_exp * 100, 2)\n\n",
             "pca_data <- as.data.frame(p$x)\n",
             "pca_data <- cbind(pca_data, metadata)\n\n",
-            sprintf('ggplot(pca_data, aes(x=PC1, y=PC2, color=%s, shape=%s)) +\n', color_col, shape_col),
+            sprintf('ggplot(pca_data, aes(x=PC1, y=PC2, color=%s, fill=%s, shape=%s)) +\n', color_col, color_col, shape_col),
             sprintf('    geom_point(size=%s) +\n', isolate(input$PCAPointSize) %||% 5),
             if (isolate(isTRUE(input$ShowLabs)))
                 sprintf('    geom_text_repel(aes(label=rownames(pca_data)), size=%s) +\n',
                         isolate(input$PCALabelSize) %||% 4)
             else "",
+            overlay_code_2d(overlay, isolate(input$PCAOverlayFill %||% TRUE),
+                            isolate(input$EType %||% "norm"), color_col),
             '    theme_minimal() +\n',
             '    labs(\n',
             '        x = paste0("PC1 (", var_pct[1], "% variance)"),\n',
@@ -323,21 +322,7 @@ observeEvent(input$show_pca_code_modal, {
         )
     }
 
-    showModal(modalDialog(
-        title     = tagList(icon("file-code"), " Reproducible R Code — PCA Biplot"),
-        size      = "l",
-        easyClose = TRUE,
-        footer    = modalButton("Close"),
-        p("Copy this code to reproduce your current PCA biplot in an offline R session.", style="color:#555; margin-bottom:12px;"),
-        tags$pre(
-            style = paste(
-                "background:#1e1e1e; color:#d4d4d4; border-radius:6px;",
-                "padding:16px; font-size:12px; max-height:520px; overflow-y:auto;",
-                "white-space:pre; font-family:'Courier New', monospace;"
-            ),
-            code
-        )
-    ))
+    show_code_modal("PCA Biplot", code)
 })
 
 # ─── Help Modal ──────────────────────────────────────────────────────────────
@@ -412,32 +397,38 @@ observeEvent(input$show_tsne_code_modal, {
         code <- "# Load your data first, then click here to get the reproducible code."
     } else {
         color_col <- isolate(input$tSNEColor %||% "Group")
+        overlay   <- isolate(input$TOverlay %||% "none")
+        n         <- ncol(ds$count_data)
+        perp_req  <- isolate(input$tperplex) %||% 30
+        perp      <- safe_perplexity(perp_req, n)
         code <- paste0(
-            "library(Rtsne)\nlibrary(ggplot2)\nlibrary(ggrepel)\n\n",
-            "# count_mat — genes x samples; metadata — data.frame\n\n",
+            "library(Rtsne)\nlibrary(ggplot2)\nlibrary(ggrepel)\n",
+            "",
+            "\n# count_mat — genes x samples; metadata — data.frame\n\n",
             sprintf("set.seed(%s)\n", isolate(input$tseed) %||% 0),
-            "tsne_fit <- t(count_mat) |> as.data.frame() |>\n",
-            sprintf('    Rtsne(dims=3, perplexity=%s, theta=%s, max_iter=%s)\n\n',
-                    isolate(input$tperplex) %||% 30,
+            if (perp != perp_req)
+                sprintf("# perplexity capped to %s (dataset has %s samples; tSNE needs 3*perplexity < n-1)\n", perp, n)
+            else "",
+            sprintf('tsne_fit <- Rtsne(t(count_mat), dims=3, perplexity=%s, theta=%s, max_iter=%s)\n\n',
+                    perp,
                     isolate(input$ttheta)   %||% 0.5,
                     isolate(input$titer)    %||% 1000),
             "tsne_df <- as.data.frame(tsne_fit$Y)\n",
             'colnames(tsne_df) <- c("tSNE1","tSNE2","tSNE3")\n',
             "tsne_df <- cbind(tsne_df, metadata)\n\n",
-            sprintf('ggplot(tsne_df, aes(x=tSNE1, y=tSNE2, color=%s)) +\n', color_col),
+            sprintf('ggplot(tsne_df, aes(x=tSNE1, y=tSNE2, color=%s, fill=%s)) +\n', color_col, color_col),
             sprintf('    geom_point(size=%s) +\n', isolate(input$tSNEPointSize) %||% 5),
+            if (isolate(isTRUE(input$TLabels)))
+                sprintf('    geom_label_repel(aes(label=%s), size=%s) +\n',
+                        isolate(input$TLabChoice %||% color_col), isolate(input$TLabSize) %||% 4)
+            else "",
+            overlay_code_2d(overlay, isolate(input$TFEncirc %||% TRUE),
+                            isolate(input$TEType %||% "norm"), color_col),
             '    theme_bw() +\n',
             sprintf('    theme(legend.position="%s")\n', isolate(input$TLegendPos) %||% "bottom")
         )
     }
-    showModal(modalDialog(
-        title=tagList(icon("file-code"), " Reproducible R Code — tSNE"),
-        size="l", easyClose=TRUE, footer=modalButton("Close"),
-        p("Copy this code to reproduce your tSNE plot offline.", style="color:#555; margin-bottom:12px;"),
-        tags$pre(style=paste("background:#1e1e1e; color:#d4d4d4; border-radius:6px;",
-            "padding:16px; font-size:12px; max-height:520px; overflow-y:auto;",
-            "white-space:pre; font-family:'Courier New', monospace;"), code)
-    ))
+    show_code_modal("tSNE", code)
 })
 
 observeEvent(input$show_umap_code_modal, {
@@ -446,11 +437,19 @@ observeEvent(input$show_umap_code_modal, {
         code <- "# Load your data first, then click here to get the reproducible code."
     } else {
         color_col <- isolate(input$UMAPColor %||% "Group")
+        overlay   <- isolate(input$UOverlay %||% "none")
+        n         <- ncol(ds$count_data)
+        nb_req    <- isolate(input$uneighbors) %||% 15
+        nb        <- safe_neighbors(nb_req, n)
         code <- paste0(
-            "library(umap)\nlibrary(ggplot2)\n\n",
-            "# count_mat — genes x samples; metadata — data.frame\n\n",
+            "library(umap)\nlibrary(ggplot2)\nlibrary(ggrepel)\n",
+            "",
+            "\n# count_mat — genes x samples; metadata — data.frame\n\n",
             "umap_config <- umap.defaults\n",
-            sprintf("umap_config$n_neighbors    <- %s\n", isolate(input$uneighbors) %||% 15),
+            if (nb != nb_req)
+                sprintf("# n_neighbors capped to %s (dataset has %s samples; UMAP needs n_neighbors < n)\n", nb, n)
+            else "",
+            sprintf("umap_config$n_neighbors    <- %s\n", nb),
             sprintf("umap_config$n_epochs       <- %s\n", isolate(input$uepochs)   %||% 200),
             sprintf("umap_config$metric         <- '%s'\n", isolate(input$umetric)  %||% "euclidean"),
             sprintf("umap_config$min_dist       <- %s\n", isolate(input$udist)     %||% 0.1),
@@ -459,21 +458,143 @@ observeEvent(input$show_umap_code_modal, {
             "umap_df  <- as.data.frame(umap_fit$layout)\n",
             'colnames(umap_df) <- c("UMAP1","UMAP2")\n',
             "umap_df  <- cbind(umap_df, metadata)\n\n",
-            sprintf('ggplot(umap_df, aes(x=UMAP1, y=UMAP2, color=%s)) +\n', color_col),
+            sprintf('ggplot(umap_df, aes(x=UMAP1, y=UMAP2, color=%s, fill=%s)) +\n', color_col, color_col),
             sprintf('    geom_point(size=%s) +\n', isolate(input$UMAPPointSize) %||% 5),
+            if (isolate(isTRUE(input$ULabels)))
+                sprintf('    geom_label_repel(aes(label=%s), size=%s) +\n',
+                        isolate(input$ULabChoice %||% color_col), isolate(input$ULabSize) %||% 4)
+            else "",
+            overlay_code_2d(overlay, isolate(input$UFEncirc %||% TRUE),
+                            isolate(input$UEType %||% "norm"), color_col),
             '    theme_bw() +\n',
             sprintf('    theme(legend.position="%s")\n', isolate(input$ULegendPos) %||% "bottom")
         )
     }
-    showModal(modalDialog(
-        title=tagList(icon("file-code"), " Reproducible R Code — UMAP"),
-        size="l", easyClose=TRUE, footer=modalButton("Close"),
-        p("Copy this code to reproduce your UMAP plot offline.", style="color:#555; margin-bottom:12px;"),
-        tags$pre(style=paste("background:#1e1e1e; color:#d4d4d4; border-radius:6px;",
-            "padding:16px; font-size:12px; max-height:520px; overflow-y:auto;",
-            "white-space:pre; font-family:'Courier New', monospace;"), code)
-    ))
+    show_code_modal("UMAP", code)
 })
 
-# ─── Null-coalescing operator ─────────────────────────────────────────────────
-`%||%` <- function(a, b) if (!is.null(a) && length(a) > 0) a else b
+# ─── 3D PCA / Eigenplot / Scree / 3D tSNE / 3D UMAP Code Modals ───────────────
+
+observeEvent(input$show_pca3d_code_modal, {
+    ds <- isolate(tryCatch(InputReactive(), error=function(e) NULL))
+    if (is.null(ds)) {
+        code <- "# Load your data first, then click here to get the reproducible code."
+    } else {
+        color_col <- isolate(input$PCAColor %||% "Group")
+        code <- paste0(
+            "library(plotly)\n\n",
+            "# count_mat — genes x samples numeric matrix\n",
+            "# metadata  — data.frame with sample metadata\n\n",
+            "p  <- prcomp(t(count_mat))\n",
+            "df <- as.data.frame(p$x)\n",
+            "df <- cbind(df, metadata)\n\n",
+            sprintf('plot_ly(df, x=~PC1, y=~PC2, z=~PC3, color=~%s,\n', color_col),
+            sprintf('    type="scatter3d", mode="markers", marker=list(size=%s))\n',
+                    isolate(input$PCAPointSize) %||% 5)
+        )
+    }
+    show_code_modal("3D PCA", code)
+})
+
+observeEvent(input$show_eigen_code_modal, {
+    ds <- isolate(tryCatch(InputReactive(), error=function(e) NULL))
+    if (is.null(ds)) {
+        code <- "# Load your data first, then click here to get the reproducible code."
+    } else {
+        metavars <- isolate(input$EigenMetavars)
+        mv <- if (length(metavars) >= 1)
+            paste0("c(", paste(sprintf('"%s"', metavars), collapse=", "), ")")
+        else "colnames(metadata)"
+        code <- paste0(
+            "library(PCAtools)\n\n",
+            "# count_mat — genes x samples; metadata — data.frame (rownames = sample names)\n\n",
+            "# eigencorplot needs numeric metadata — coerce categorical columns to factor codes\n",
+            "metadata[] <- lapply(metadata, function(x)\n",
+            "    if (is.numeric(x)) x else as.numeric(as.factor(x)))\n\n",
+            "p <- pca(count_mat, metadata=metadata, removeVar=0.1)\n\n",
+            sprintf("eigencorplot(p, metavars=%s,\n", mv),
+            sprintf('    corFUN="%s", corMultipleTestCorrection="%s")\n',
+                    isolate(input$EFun) %||% "pearson", isolate(input$ECorrect) %||% "fdr")
+        )
+    }
+    show_code_modal("Eigenplot", code)
+})
+
+observeEvent(input$show_scree_code_modal, {
+    ds <- isolate(tryCatch(InputReactive(), error=function(e) NULL))
+    if (is.null(ds)) {
+        code <- "# Load your data first, then click here to get the reproducible code."
+    } else {
+        code <- paste0(
+            "library(PCAtools)\n\n",
+            "# count_mat — genes x samples; metadata — data.frame\n\n",
+            "p <- pca(count_mat, metadata=metadata, removeVar=0.1)\n\n",
+            sprintf("screeplot(p, xlabAngle=%s, axisLabSize=%s)\n",
+                    isolate(input$SLabRot) %||% 45, isolate(input$SLabSize) %||% 16)
+        )
+    }
+    show_code_modal("Scree Plot", code)
+})
+
+observeEvent(input$show_tsne3d_code_modal, {
+    ds <- isolate(tryCatch(InputReactive(), error=function(e) NULL))
+    if (is.null(ds)) {
+        code <- "# Load your data first, then click here to get the reproducible code."
+    } else {
+        color_col <- isolate(input$tSNEColor %||% "Group")
+        n         <- ncol(ds$count_data)
+        perp_req  <- isolate(input$tperplex) %||% 30
+        perp      <- safe_perplexity(perp_req, n)
+        code <- paste0(
+            "library(Rtsne)\nlibrary(plotly)\n\n",
+            "# count_mat — genes x samples; metadata — data.frame\n\n",
+            sprintf("set.seed(%s)\n", isolate(input$tseed) %||% 0),
+            if (perp != perp_req)
+                sprintf("# perplexity capped to %s (dataset has %s samples; tSNE needs 3*perplexity < n-1)\n", perp, n)
+            else "",
+            sprintf('tsne_fit <- Rtsne(t(count_mat), dims=3, perplexity=%s, theta=%s, max_iter=%s)\n\n',
+                    perp,
+                    isolate(input$ttheta)   %||% 0.5,
+                    isolate(input$titer)    %||% 1000),
+            "df <- as.data.frame(tsne_fit$Y)\n",
+            'colnames(df) <- c("tSNE1","tSNE2","tSNE3")\n',
+            "df <- cbind(df, metadata)\n\n",
+            sprintf('plot_ly(df, x=~tSNE1, y=~tSNE2, z=~tSNE3, color=~%s,\n', color_col),
+            sprintf('    type="scatter3d", mode="markers", marker=list(size=%s))\n',
+                    isolate(input$tSNEPointSize) %||% 5)
+        )
+    }
+    show_code_modal("3D tSNE", code)
+})
+
+observeEvent(input$show_umap3d_code_modal, {
+    ds <- isolate(tryCatch(InputReactive(), error=function(e) NULL))
+    if (is.null(ds)) {
+        code <- "# Load your data first, then click here to get the reproducible code."
+    } else {
+        color_col <- isolate(input$UMAPColor %||% "Group")
+        n         <- ncol(ds$count_data)
+        nb_req    <- isolate(input$uneighbors) %||% 15
+        nb        <- safe_neighbors(nb_req, n)
+        code <- paste0(
+            "library(umap)\nlibrary(plotly)\n\n",
+            "# count_mat — genes x samples; metadata — data.frame\n\n",
+            "umap_config <- umap.defaults\n",
+            "umap_config$n_components <- 3\n",
+            if (nb != nb_req)
+                sprintf("# n_neighbors capped to %s (dataset has %s samples; UMAP needs n_neighbors < n)\n", nb, n)
+            else "",
+            sprintf("umap_config$n_neighbors  <- %s\n", nb),
+            sprintf("umap_config$min_dist     <- %s\n", isolate(input$udist) %||% 0.1),
+            sprintf("umap_config$metric       <- '%s'\n\n", isolate(input$umetric) %||% "euclidean"),
+            "umap_fit <- umap(t(count_mat), config=umap_config)\n",
+            "df <- as.data.frame(umap_fit$layout)\n",
+            'colnames(df) <- c("UMAP1","UMAP2","UMAP3")\n',
+            "df <- cbind(df, metadata)\n\n",
+            sprintf('plot_ly(df, x=~UMAP1, y=~UMAP2, z=~UMAP3, color=~%s,\n', color_col),
+            sprintf('    type="scatter3d", mode="markers", marker=list(size=%s))\n',
+                    isolate(input$UMAPPointSize) %||% 5)
+        )
+    }
+    show_code_modal("3D UMAP", code)
+})

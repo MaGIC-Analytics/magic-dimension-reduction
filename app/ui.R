@@ -15,6 +15,20 @@ library(PCAtools)
 library(plotly)
 library(ggalt)
 
+# Small "view reproducible R code" button shown on every plot tab
+code_modal_btn <- function(id) {
+    fluidRow(style="margin: 0 8px 4px 0;",
+        column(12, align="right",
+            actionButton(id, label=NULL,
+                icon=icon("file-code"),
+                title="View R code to reproduce this plot",
+                class="btn btn-default btn-sm",
+                style="border-radius:6px; font-size:16px; padding:4px 8px;"
+            )
+        )
+    )
+}
+
 tagList(
     tags$head(
         includeHTML(("www/GA.html")),
@@ -230,19 +244,23 @@ tagList(
                                 )
                             ),
                             conditionalPanel("input.PCAplots=='Biplots'",
+                                materialSwitch("GrpOverlayOpts", label="Group overlay options", value=FALSE, right=TRUE, status='info'),
+                                conditionalPanel("input.GrpOverlayOpts",
+                                    radioButtons("PCAOverlay", label="Group overlay", inline=TRUE,
+                                        choices=c("None"='none', "Encircle"='encircle', "Stat ellipse"='ellipse'), selected='none'),
+                                    conditionalPanel("input.PCAOverlay=='ellipse'",
+                                        radioButtons("EType", label="Ellipse Type", inline=TRUE,
+                                            choices=c("Normal"='norm', "T"='t', "Euclid"='euclid'), selected="norm"),
+                                    ),
+                                    conditionalPanel("input.PCAOverlay!='none'",
+                                        materialSwitch("PCAOverlayFill", label="Fill the shape", value=TRUE, right=TRUE, status='info'),
+                                    ),
+                                ),
+                            ),
+                            conditionalPanel("input.PCAplots=='Biplots'",
                                 materialSwitch("ShowLabs", label="Show label options", value=FALSE, right=TRUE, status='info'),
                                 conditionalPanel("input.ShowLabs",
                                     sliderInput("PCALabelSize","Label size: ", min=0, max=30, step=1, value=5),
-                                    materialSwitch("Encirc", label="Encircle the samples", value=FALSE, right=TRUE, status='info'),
-                                    conditionalPanel("input.Encirc",
-                                        materialSwitch("FEncirc", label="Fill the encircle", value=TRUE, right=TRUE, status='info'),
-                                    ),
-                                    materialSwitch("Ellipse", label="Stat ellipses", value=FALSE, right=TRUE, status='info'),
-                                    conditionalPanel("input.Ellipse",
-                                        radioButtons("EType", label="Ellipse Type", inline=TRUE,
-                                            choices=c("Normal"='norm', "T"='t', "Euclid"='euclid'), selected="norm"),
-                                        materialSwitch("Efill", label="Ellipse fill", value=TRUE, right=TRUE, status='info'),
-                                    ),
                                 ),
                                 materialSwitch("AxisOpts", label="Axis font options", value=FALSE, right=TRUE, status='info'),
                                 conditionalPanel("input.AxisOpts",
@@ -297,16 +315,7 @@ tagList(
                         tabsetPanel(id='PCAplots',
                             tabPanel(title='Biplots',
                                 hr(),
-                                fluidRow(style="margin: 0 8px 4px 0;",
-                                    column(12, align="right",
-                                        actionButton("show_pca_code_modal", label=NULL,
-                                            icon=icon("file-code"),
-                                            title="View R code to reproduce this plot",
-                                            class="btn btn-default btn-sm",
-                                            style="border-radius:6px; font-size:16px; padding:4px 8px;"
-                                        )
-                                    )
-                                ),
+                                code_modal_btn("show_pca_code_modal"),
                                 hr(),
                                 withSpinner(type=6, color='#5bc0de',
                                     plotOutput("pca_out", height='100%')
@@ -317,7 +326,9 @@ tagList(
                                 )
                             ),
                             tabPanel(title='Eigenplots', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                                code_modal_btn("show_eigen_code_modal"),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotOutput("eigen_out", height='100%')
                                 ),
                                 fluidRow(align='center',style="margin-top:25px;",
@@ -326,19 +337,23 @@ tagList(
                                 )
                             ),
                             tabPanel(title='3D PCA', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                                code_modal_btn("show_pca3d_code_modal"),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotlyOutput("pca_out3d", width='auto',height='auto')
                                 )
                             ),
                             tabPanel(title='Scree Plot', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                                code_modal_btn("show_scree_code_modal"),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotOutput("scree_out", height='100%')
                                 ),
                                 fluidRow(align='center',style="margin-top:25px;",
                                     column(12, selectInput("DownScreeFormat", label='Choose download format', choices=c('jpeg','png','tiff'))),
                                     column(12, downloadButton('DownloadScreePlot', 'Download the Scree plot'),style="margin-bottom:50px;")
                                 )
-                            
+
                             )
                         )
                     )
@@ -363,6 +378,20 @@ tagList(
                                             selectInput("TLabChoice", label='Label By', choices=NULL),
                                             sliderInput("TLabSize","Label size: ", min=1, max=30, step=1, value=4),
                                         )
+                                    ),
+                                ),
+                                conditionalPanel("input.tSNEplots=='2D tSNE'",
+                                    materialSwitch("TGrpOverlayOpts", label="Group overlay options", value=FALSE, right=TRUE, status='info'),
+                                    conditionalPanel("input.TGrpOverlayOpts",
+                                        radioButtons("TOverlay", label="Group overlay", inline=TRUE,
+                                            choices=c("None"='none', "Encircle"='encircle', "Stat ellipse"='ellipse'), selected='none'),
+                                        conditionalPanel("input.TOverlay=='ellipse'",
+                                            radioButtons("TEType", label="Ellipse Type", inline=TRUE,
+                                                choices=c("Normal"='norm', "T"='t', "Euclid"='euclid'), selected="norm"),
+                                        ),
+                                        conditionalPanel("input.TOverlay!='none'",
+                                            materialSwitch("TFEncirc", label="Fill the shape", value=TRUE, right=TRUE, status='info'),
+                                        ),
                                     ),
                                 ),
                                 conditionalPanel("input.tSNEplots=='2D tSNE'",
@@ -404,16 +433,7 @@ tagList(
                         tabsetPanel(id='tSNEplots',
                             tabPanel(title='2D tSNE',
                                 hr(),
-                                fluidRow(style="margin: 0 8px 4px 0;",
-                                    column(12, align="right",
-                                        actionButton("show_tsne_code_modal", label=NULL,
-                                            icon=icon("file-code"),
-                                            title="View R code to reproduce this plot",
-                                            class="btn btn-default btn-sm",
-                                            style="border-radius:6px; font-size:16px; padding:4px 8px;"
-                                        )
-                                    )
-                                ),
+                                code_modal_btn("show_tsne_code_modal"),
                                 hr(),
                                 withSpinner(type=6, color='#5bc0de',
                                     plotOutput("tsne2d_out", height='100%')
@@ -424,7 +444,9 @@ tagList(
                                 )
                             ),
                             tabPanel(title='3D tSNE', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                                code_modal_btn("show_tsne3d_code_modal"),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotlyOutput("tsne3d_out", width='auto',height='auto')
                                 )
                             )
@@ -452,7 +474,21 @@ tagList(
                                             sliderInput("ULabSize","Label size: ", min=1, max=30, step=1, value=4),
                                         )
                                     )
-                                )
+                                ),
+                                conditionalPanel("input.UMAPplots=='2D UMAP'",
+                                    materialSwitch("UGrpOverlayOpts", label="Group overlay options", value=FALSE, right=TRUE, status='info'),
+                                    conditionalPanel("input.UGrpOverlayOpts",
+                                        radioButtons("UOverlay", label="Group overlay", inline=TRUE,
+                                            choices=c("None"='none', "Encircle"='encircle', "Stat ellipse"='ellipse'), selected='none'),
+                                        conditionalPanel("input.UOverlay=='ellipse'",
+                                            radioButtons("UEType", label="Ellipse Type", inline=TRUE,
+                                                choices=c("Normal"='norm', "T"='t', "Euclid"='euclid'), selected="norm"),
+                                        ),
+                                        conditionalPanel("input.UOverlay!='none'",
+                                            materialSwitch("UFEncirc", label="Fill the shape", value=TRUE, right=TRUE, status='info'),
+                                        ),
+                                    ),
+                                ),
                             ),
                             conditionalPanel("input.UMAPplots=='2D UMAP'",
                                 materialSwitch("ULegend", label="Show legend options", value=FALSE, right=TRUE, status='info'),
@@ -490,16 +526,7 @@ tagList(
                         tabsetPanel(id='UMAPplots',
                             tabPanel(title='2D UMAP',
                                 hr(),
-                                fluidRow(style="margin: 0 8px 4px 0;",
-                                    column(12, align="right",
-                                        actionButton("show_umap_code_modal", label=NULL,
-                                            icon=icon("file-code"),
-                                            title="View R code to reproduce this plot",
-                                            class="btn btn-default btn-sm",
-                                            style="border-radius:6px; font-size:16px; padding:4px 8px;"
-                                        )
-                                    )
-                                ),
+                                code_modal_btn("show_umap_code_modal"),
                                 hr(),
                                 withSpinner(type=6, color='#5bc0de',
                                     plotOutput("umap2d_out", height='100%')
@@ -510,7 +537,9 @@ tagList(
                                 )
                             ),
                             tabPanel(title='3D UMAP', hr(),
-                                withSpinner(type=6, color='#5bc0de',  
+                                code_modal_btn("show_umap3d_code_modal"),
+                                hr(),
+                                withSpinner(type=6, color='#5bc0de',
                                     plotlyOutput("umap3d_out", width='auto',height='auto')
                                 )
                             )

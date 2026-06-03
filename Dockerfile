@@ -10,6 +10,7 @@ RUN R -e "install.packages(c('BiocManager','shiny','shinythemes','shinycssloader
 RUN R -e "install.packages(c('proj4','ggalt'),dependencies=T)"
 RUN R -e "devtools::install_github('hrbrmstr/ggalt')"
 RUN R -e "remotes::install_github('kevinblighe/PCAtools')"
+RUN R -e "install.packages('ggforce',repos='http://cran.rstudio.com/')"
 
 COPY ./app /srv/shiny-server/
 COPY shiny-customized.config /etc/shiny-server/shiny-server.conf
